@@ -28,6 +28,7 @@ function getSmtpTransporter() {
     auth: { user: SMTP_USER.trim(), pass: SMTP_PASS.trim() },
     tls: { rejectUnauthorized: true },
     connectionTimeout: 10000,
+    family: 4,
   });
 }
 
