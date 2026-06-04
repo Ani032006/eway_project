@@ -8,7 +8,8 @@
  * Usage:  node scripts/importCSV.js
  */
 
-require("dotenv").config();
+require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
+
 const fs = require("fs");
 const path = require("path");
 const mongoose = require("mongoose");
@@ -17,7 +18,10 @@ const { getCoords, loadPincodes } = require("../utils/pincodeLoader");
 const { haversine, bearing } = require("../utils/geoUtils");
 const { detect } = require("../utils/suspiciousDetector");
 
-const CSV_PATH = "C:\\Users\\gamer\\Downloads\\intern_data.csv";
+// Resolve intern_data.csv relative to this script's location.
+// __dirname = Eway_project/frontend/backend/scripts
+// 3 levels up  → Eway_project/  (where intern_data.csv lives)
+const CSV_PATH = path.join(__dirname, "..", "..", "..", "intern_data.csv");
 const BATCH_SIZE = 2000;
 
 function parseCSV(filePath) {
@@ -114,6 +118,15 @@ async function main() {
   console.log("Connecting to MongoDB...");
   await mongoose.connect(process.env.MONGO_URI);
   console.log("Connected!\n");
+
+  // Verify the CSV file exists before proceeding
+  if (!fs.existsSync(CSV_PATH)) {
+    console.error(`\n❌ CSV file not found at:\n   ${CSV_PATH}`);
+    console.error(`\n   Expected: intern_data.csv at the project root (Eway_project/intern_data.csv)`);
+    console.error(`   Please ensure intern_data.csv is placed there and retry.\n`);
+    await mongoose.disconnect();
+    process.exit(1);
+  }
 
   console.log("Clearing existing EwayBill records...");
   await EwayBill.deleteMany({});

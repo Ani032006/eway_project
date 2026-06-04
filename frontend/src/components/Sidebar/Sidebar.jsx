@@ -1,4 +1,5 @@
 import { useNavigate, useLocation } from "react-router-dom";
+import { logout } from "../../services/api";
 
 function Sidebar({ setActiveSection, activeSection }) {
   const navigate = useNavigate();
@@ -77,20 +78,25 @@ function Sidebar({ setActiveSection, activeSection }) {
 
       {/* BOTTOM SECTION */}
 
-      <div
+      <button
+        type="button"
+        onClick={() => {
+          logout();
+          navigate("/login");
+        }}
         style={{
-          background: "#005F5F",
+          background: "#C62828",
+          border: "none",
+          color: "white",
           padding: "16px",
           borderRadius: "12px",
-          textAlign: "center",
-          fontSize: "14px",
-          fontWeight: "bold",
-          color: "#FFFFCC",
-          border: "1px solid #007A7A"
+          cursor: "pointer",
+          fontSize: "16px",
+          width: "100%",
         }}
       >
-        🟢 System Online
-      </div>
+        Logout
+      </button>
     </div>
   );
 }

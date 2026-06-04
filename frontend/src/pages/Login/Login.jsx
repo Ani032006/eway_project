@@ -9,9 +9,12 @@ function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState("");
 
   const handleLogin = async () => {
     setError("");
+    setNeedsVerification(false);
     setLoading(true);
     try {
       const data = await login(email, password);
@@ -24,7 +27,13 @@ function Login() {
         navigate("/dashboard");
       }
     } catch (err) {
-      setError(err.message);
+      if (err.data?.requiresVerification && err.data?.email) {
+        setNeedsVerification(true);
+        setUnverifiedEmail(err.data.email);
+        setError("Your email is not yet verified. Please complete OTP verification.");
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -43,7 +52,6 @@ function Login() {
       }}
     >
       {/* LEFT SIDE */}
-
       <div
         style={{
           flex: 1,
@@ -58,10 +66,10 @@ function Login() {
           style={{
             fontSize: "48px",
             marginBottom: "20px",
+            lineHeight: 1.2,
           }}
         >
-          E-Way Intelligence
-          System
+          E-Way Intelligence System
         </h1>
 
         <p
@@ -69,19 +77,15 @@ function Login() {
             fontSize: "20px",
             color: "#E0E0E0",
             maxWidth: "500px",
+            lineHeight: 1.7,
           }}
         >
-          Monitor E-Way bill
-          movement, track
-          transportation routes,
-          and investigate
-          vehicle-level movement
-          intelligence.
+          Monitor E-Way bill movement, track transportation routes, and
+          investigate vehicle-level movement intelligence.
         </p>
       </div>
 
       {/* RIGHT SIDE */}
-
       <div
         style={{
           width: "450px",
@@ -96,12 +100,15 @@ function Login() {
           <h2
             style={{
               color: "white",
-              marginBottom: "30px",
+              marginBottom: "8px",
               fontSize: "32px",
             }}
           >
             Officer Login
           </h2>
+          <p style={{ color: "#B2DFDB", marginBottom: "30px", fontSize: "14px" }}>
+            Sign in to access the E-Way Intelligence dashboard.
+          </p>
 
           <div
             style={{
@@ -110,6 +117,7 @@ function Login() {
               gap: "18px",
             }}
           >
+            {/* Error message */}
             {error && (
               <div
                 style={{
@@ -121,27 +129,58 @@ function Login() {
                 }}
               >
                 {error}
+                {needsVerification && (
+                  <div style={{ marginTop: "10px" }}>
+                    <button
+                      id="go-to-register-btn"
+                      onClick={() =>
+                        navigate("/register", {
+                          state: { email: unverifiedEmail },
+                        })
+                      }
+                      style={{
+                        background: "#FFFFCC",
+                        color: "#000",
+                        border: "none",
+                        padding: "8px 16px",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        fontWeight: "bold",
+                        fontSize: "13px",
+                        marginRight: "8px",
+                      }}
+                    >
+                      Go to OTP Verification →
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
             <input
-              placeholder="Officer Email / ID"
+              id="login-email"
+              placeholder="Officer Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={handleKeyDown}
               style={inputStyle}
+              type="email"
+              autoComplete="username"
             />
 
             <input
+              id="login-password"
               type="password"
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={handleKeyDown}
               style={inputStyle}
+              autoComplete="current-password"
             />
 
             <button
+              id="login-btn"
               onClick={handleLogin}
               disabled={loading}
               style={{
@@ -149,34 +188,28 @@ function Login() {
                 opacity: loading ? 0.7 : 1,
               }}
             >
-              {loading ? "Logging in..." : "Login"}
+              {loading ? "Logging in…" : "Login"}
             </button>
+
+            <p style={{ color: "#E0E0E0" }}>
+              <span
+                id="forgot-password-link"
+                onClick={() => navigate("/forgot-password")}
+                style={{ color: "#FFFFCC", cursor: "pointer" }}
+              >
+                Forgot password?
+              </span>
+            </p>
 
             <p style={{ color: "#E0E0E0" }}>
               New officer?{" "}
               <span
+                id="register-link"
                 onClick={() => navigate("/register")}
-                style={{
-                  color: "#FFFFCC",
-                  cursor: "pointer",
-                }}
+                style={{ color: "#FFFFCC", cursor: "pointer" }}
               >
                 Register here
               </span>
-            </p>
-
-            <p
-              style={{
-                color: "#E0E0E0",
-                fontSize: "14px",
-                marginTop: "10px",
-              }}
-            >
-              Admin Login:
-              <br />
-              admin@gmail.com
-              <br />
-              Password: admin
             </p>
           </div>
         </div>

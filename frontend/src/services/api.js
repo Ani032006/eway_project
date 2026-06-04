@@ -4,7 +4,7 @@ async function request(endpoint, options = {}) {
   const token = localStorage.getItem("ewb_token");
   const headers = { ...options.headers };
 
-  if (token) {
+  if (token && token !== "immediate_access_token") {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
@@ -12,18 +12,44 @@ async function request(endpoint, options = {}) {
     headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    throw new Error(data.error || `Request failed (${res.status})`);
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new Error(
+      "Cannot reach the API. Start the backend from the frontend folder: npm run dev:api (or npm run dev). Also ensure MongoDB is running."
+    );
   }
 
-  return data;
+  const text = await res.text();
+  let data = null;
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(
+        `Server returned an invalid response (${res.status}). Check that the API is running on port 5000.`
+      );
+    }
+  }
+
+  if (!res.ok) {
+    const err = new Error(
+      data?.error ||
+        (res.status === 502 || res.status === 504
+          ? "API server is not running. Run: cd frontend && npm run dev:api"
+          : `Request failed (${res.status})`)
+    );
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+
+  return data ?? {};
 }
 
 // ─── Auth ──────────────────────────────────────────────────
@@ -35,16 +61,45 @@ export function login(email, password) {
   });
 }
 
-export function register({ name, email, password, state }) {
+export function register({ name, email, password, state, department }) {
   return request("/auth/register", {
     method: "POST",
-    body: JSON.stringify({
-      name,
-      email,
-      password,
-      state,
-      department: "GST Intelligence",
-    }),
+    body: JSON.stringify({ name, email, password, state, department }),
+  });
+}
+
+export function sendOtp(email) {
+  return request("/auth/send-otp", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function verifyOtp(email, otp) {
+  return request("/auth/verify-otp", {
+    method: "POST",
+    body: JSON.stringify({ email, otp }),
+  });
+}
+
+export function forgotPassword(email) {
+  return request("/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function resetPassword({ token, email, password }) {
+  return request("/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ token, email, password }),
+  });
+}
+
+export function changePassword({ currentPassword, newPassword }) {
+  return request("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({ currentPassword, newPassword }),
   });
 }
 
@@ -62,6 +117,11 @@ export function approveUser(id) {
 
 export function getAllOfficers() {
   return request("/auth/officers");
+}
+
+export function logout() {
+  localStorage.removeItem("ewb_token");
+  localStorage.removeItem("ewb_user");
 }
 
 // ─── E-Way Bills ───────────────────────────────────────────
@@ -107,4 +167,3 @@ export function getDistricts(state) {
 export function deleteAllBills() {
   return request("/ewb", { method: "DELETE" });
 }
-
