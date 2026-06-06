@@ -1,25 +1,52 @@
-const { Resend } = require("./backend/node_modules/resend");
-const resend = new Resend("re_LZQNkxiZ_C5jcZUTzwJS9yGNt8gVw1Gio");
+/**
+ * Standalone SMTP test script.
+ * Run from the `frontend/` folder:
+ *   node test-email.js your.address@gmail.com
+ *
+ * This loads the same .env and the same emailService the backend uses —
+ * so if this works, registration/forgot-password emails will work too.
+ */
 
-resend.emails.send({
-  from: "E-Way Intelligence <onboarding@resend.dev>",
-  to: "e.admin26@gmail.com",
-  subject: "E-Way Intelligence — Email Service Test",
-  html: `
-    <div style="font-family:Arial,sans-serif;max-width:480px;padding:30px;background:#004848;border-radius:16px;color:#fff;">
-      <h2 style="color:#FFFFCC;margin:0 0 16px;">✅ Email is working!</h2>
-      <p style="color:#E0E0E0;margin:0 0 12px;">Your <strong>E-Way Intelligence System</strong> email service is now connected via Resend.</p>
-      <p style="color:#B2DFDB;margin:0;font-size:14px;">OTP verification emails and password reset links will now be delivered directly to users' inboxes.</p>
-    </div>
-  `,
-  text: "Email working! E-Way Intelligence email service is connected via Resend.",
-}).then((r) => {
-  if (r.error) {
-    console.log("RESEND ERROR:", JSON.stringify(r.error, null, 2));
-  } else {
-    console.log("SUCCESS! Email sent. Message ID:", r.data.id);
-    console.log("Check e.admin26@gmail.com inbox (also check Spam).");
-  }
-}).catch((e) => {
-  console.log("FATAL:", e.message);
+const path = require("path");
+require(path.join(__dirname, "backend", "node_modules", "dotenv")).config({
+  path: path.join(__dirname, "backend", ".env"),
 });
+
+const { sendTestEmail, verifySmtpConnection } = require("./backend/utils/emailService");
+
+const recipient = process.argv[2];
+
+if (!recipient) {
+  console.error("\nUsage: node test-email.js <recipient-email>\n");
+  console.error("Example: node test-email.js e.admin26@gmail.com\n");
+  process.exit(1);
+}
+
+(async () => {
+  console.log("\n══════════════════════════════════════════════");
+  console.log("  E-Way Intelligence — SMTP Diagnostic Test");
+  console.log("══════════════════════════════════════════════\n");
+
+  console.log("Step 1: Verifying SMTP connection …");
+  const verified = await verifySmtpConnection();
+
+  if (!verified) {
+    console.error(
+      "\n❌ SMTP connection could not be verified. Fix the issues above, then re-run this script.\n"
+    );
+    process.exit(1);
+  }
+
+  console.log(`\nStep 2: Sending test email to ${recipient} …`);
+  const result = await sendTestEmail(recipient);
+
+  if (result.devMode) {
+    console.error("\n❌ Test email was NOT delivered (SMTP failed).");
+    console.error("   See the error details printed above ↑");
+    console.error("   Fix the SMTP issue, restart the server, and try again.\n");
+    process.exit(1);
+  }
+
+  console.log(`\n✅ SUCCESS — test email sent via port ${result.port}!`);
+  console.log(`   Check ${recipient} inbox (also check the Spam/Junk folder).\n`);
+})();

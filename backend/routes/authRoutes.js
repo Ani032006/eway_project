@@ -12,6 +12,9 @@ router.post("/login", ctrl.login);
 router.post("/forgot-password", ctrl.forgotPassword);
 router.post("/reset-password", ctrl.resetPassword);
 
+// Diagnostic — verify SMTP is working (no auth required so it can be tested standalone)
+router.post("/test-email", ctrl.testEmail);
+
 // Protected
 router.post("/change-password", authenticate, ctrl.changePassword);
 router.get("/profile", authenticate, ctrl.getProfile);

@@ -2,7 +2,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { JWT_SECRET } = require("../middleware/auth");
 const { generateOtp, generateResetToken, hashToken } = require("../utils/otp");
-const { sendOtpEmail, sendPasswordResetEmail } = require("../utils/emailService");
+const { sendOtpEmail, sendPasswordResetEmail, sendWelcomeEmail, sendTestEmail } = require("../utils/emailService");
 const {
   validateEmail,
   validatePassword,
@@ -164,6 +164,11 @@ exports.verifyOtp = async (req, res) => {
     user.otp = null;
     user.otpExpires = null;
     await user.save({ validateBeforeSave: false });
+
+    // Send welcome email (non-blocking — don't let this failure block the response)
+    sendWelcomeEmail(user.email, user.name).catch((e) =>
+      console.warn("[AUTH] Welcome email failed (non-critical):", e.message)
+    );
 
     const token = signToken(user);
 
@@ -361,6 +366,50 @@ exports.getAllOfficers = async (req, res) => {
       .sort({ createdAt: -1 });
     res.json(officers);
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// ─── Test Email endpoint (POST /api/auth/test-email) ─────────────────────────
+// Sends a real email via the configured SMTP transport.
+// Useful to verify SMTP credentials independently of user flows.
+exports.testEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email || typeof email !== "string" || !email.trim()) {
+      return res.status(400).json({ error: "\"email\" field is required in the request body." });
+    }
+
+    const emailErr = validateEmail(email.trim());
+    if (emailErr) return res.status(400).json({ error: emailErr });
+
+    console.log(`[TEST-EMAIL] Sending test email to: ${email.trim()}`);
+    const result = await sendTestEmail(email.trim());
+
+    if (result.devMode) {
+      return res.status(502).json({
+        success: false,
+        devMode: true,
+        message: "SMTP failed — email was NOT delivered. Check the server console for the exact error and diagnosis.",
+        hint: [
+          "1. Verify SMTP_USER and SMTP_PASS (16-char App Password) in .env",
+          "2. Ensure 2-Step Verification is ON for the Gmail account",
+          "3. Try SMTP_PORT=465 in .env if port 587 is blocked",
+          "4. Test on a mobile hotspot — your ISP may block port 587",
+        ],
+        smtpError: result.smtpError || null,
+      });
+    }
+
+    return res.json({
+      success: true,
+      provider: result.provider,
+      port: result.port,
+      message: `✅ Test email delivered via SMTP (port ${result.port}) to ${email.trim()}. Check your inbox (and spam folder).`,
+    });
+  } catch (err) {
+    console.error("[TEST-EMAIL] Unexpected error:", err);
     res.status(500).json({ error: err.message });
   }
 };
