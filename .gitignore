@@ -30,9 +30,10 @@ lerna-debug.log*
 *.sln
 *.sw?
 
-# Python
+# Python / ML files
 __pycache__/
 *.pyc
+*.py
 
 # Root-level analysis outputs and large datasets (to avoid pushing files >100MB to GitHub)
 /*.csv
