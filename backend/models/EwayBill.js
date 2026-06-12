@@ -25,7 +25,8 @@ const ewayBillSchema = new mongoose.Schema({
 
   actual_distance: { type: Number },
   ideal_bearing: { type: Number },
-  distance_ratio: { type: Number },
+  actual_bearing: { type: Number },
+  bearing_deviation: { type: Number },
 
   suspicious: { type: Boolean, default: false },
   suspicious_reasons: [{ type: String }],

@@ -1,44 +1,32 @@
-/**
- * Import intern_data.csv into MongoDB
- *
- * Reads the CSV, enriches each row with geo-coordinates,
- * haversine distance, bearing, distance ratio, and suspicious
- * detection — identical to the Excel upload pipeline.
- *
- * Usage:  node scripts/importCSV.js
- */
-
-require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
-
+require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
 const mongoose = require("mongoose");
+const xlsx = require("xlsx");
 const EwayBill = require("../models/EwayBill");
 const { getCoords, loadPincodes } = require("../utils/pincodeLoader");
 const { haversine, bearing } = require("../utils/geoUtils");
-const { detect } = require("../utils/suspiciousDetector");
+const { detect, detectOverlapping } = require("../utils/suspiciousDetector");
 
-// Resolve intern_data.csv relative to this script's location.
-const CSV_PATH = "C:\\Users\\gamer\\Downloads\\intern_data (1).csv";
-const BATCH_SIZE = 2000;
+const BATCH_SIZE = 1000;
 
-function parseCSV(filePath) {
-  const raw = fs.readFileSync(filePath, "utf-8");
-  const lines = raw.split("\n").filter((l) => l.trim());
-  const header = lines[0].split(",").map((h) => h.trim());
+// Try CSV (Excel format) first, then fallback to .xlsx path
+const pathsToTry = [
+  "C:\\Users\\gamer\\Downloads\\intern_data_500_to_pin_shuffled.csv",
 
-  const rows = [];
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(",");
-    if (cols.length < header.length) continue;
+];
 
-    const row = {};
-    for (let j = 0; j < header.length; j++) {
-      row[header[j]] = cols[j]?.trim();
-    }
-    rows.push(row);
+let EXCEL_PATH = null;
+for (const p of pathsToTry) {
+  if (fs.existsSync(p)) {
+    EXCEL_PATH = p;
+    break;
   }
-  return rows;
+}
+
+if (!EXCEL_PATH) {
+  console.error("Error: Could not find ewb_500_modified.csv or ewb_500_modified.xlsx on Desktop!");
+  process.exit(1);
 }
 
 function enrichRow(row) {
@@ -87,7 +75,7 @@ function enrichRow(row) {
     cgst_amt: parseFloat(row.cgst_amt) || 0,
     sgst_amt: parseFloat(row.sgst_amt) || 0,
     igst_amt: parseFloat(row.igst_amt) || 0,
-    vehicle_number: row.vehicle_number || null,
+    vehicle_number: row.vehicle_number ? String(row.vehicle_number).replace(/[\\s-]/g, '').toUpperCase() : null,
     from_lat,
     from_lng,
     to_lat,
@@ -112,42 +100,37 @@ async function main() {
   await mongoose.connect(process.env.MONGO_URI);
   console.log("Connected!\n");
 
-  // Verify the CSV file exists before proceeding
-  if (!fs.existsSync(CSV_PATH)) {
-    console.error(`\n❌ CSV file not found at:\n   ${CSV_PATH}`);
-    console.error(`\n   Expected: intern_data.csv at the project root (Eway_project/intern_data.csv)`);
-    console.error(`   Please ensure intern_data.csv is placed there and retry.\n`);
-    await mongoose.disconnect();
-    process.exit(1);
-  }
-
   console.log("Clearing existing EwayBill records...");
   await EwayBill.deleteMany({});
 
   console.log("Loading pincode lookup...");
   loadPincodes();
 
-  console.log(`\nParsing CSV: ${CSV_PATH}`);
-  const rows = parseCSV(CSV_PATH);
+  console.log(`\nParsing Excel/CSV: ${EXCEL_PATH}`);
+  const workbook = xlsx.readFile(EXCEL_PATH, { cellDates: true });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = xlsx.utils.sheet_to_json(sheet);
   console.log(`Found ${rows.length} rows\n`);
 
+  console.log("Enriching rows...");
+  const enriched = rows.map(enrichRow);
+
+  console.log("Detecting conflicting overlapping direction E-Way Bills...");
+  detectOverlapping(enriched);
+
+  console.log("Inserting EwayBill records in batches...");
   let inserted = 0;
   let skipped = 0;
   let suspicious = 0;
 
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    const batch = rows.slice(i, i + BATCH_SIZE);
-    const enriched = batch.map(enrichRow);
-
-    suspicious += enriched.filter((b) => b.suspicious).length;
+  for (let i = 0; i < enriched.length; i += BATCH_SIZE) {
+    const batch = enriched.slice(i, i + BATCH_SIZE);
+    suspicious += batch.filter((b) => b.suspicious).length;
 
     try {
-      const result = await EwayBill.insertMany(enriched, {
-        ordered: false,
-      });
+      const result = await EwayBill.insertMany(batch, { ordered: false });
       inserted += result.length;
     } catch (err) {
-      // Duplicate key errors — count what was inserted
       if (err.insertedDocs) {
         inserted += err.insertedDocs.length;
         skipped += batch.length - err.insertedDocs.length;
@@ -159,13 +142,10 @@ async function main() {
         skipped += batch.length;
       }
     }
-
-    const pct = Math.min(100, Math.round(((i + batch.length) / rows.length) * 100));
-    process.stdout.write(`\rProgress: ${pct}% | Inserted: ${inserted} | Skipped: ${skipped}`);
   }
 
-  console.log(`\n\n========== IMPORT COMPLETE ==========`);
-  console.log(`Total rows:    ${rows.length}`);
+  console.log(`\n========== IMPORT COMPLETE ==========`);
+  console.log(`Total rows:    ${enriched.length}`);
   console.log(`Inserted:      ${inserted}`);
   console.log(`Skipped (dup): ${skipped}`);
   console.log(`Suspicious:    ${suspicious}`);

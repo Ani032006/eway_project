@@ -33,7 +33,9 @@ function Overview() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [filterSuspicious, setFilterSuspicious] = useState("");
+  const [filterReason, setFilterReason] = useState("");
   const [searchVehicle, setSearchVehicle] = useState("");
+  const [searchEwb, setSearchEwb] = useState("");
 
   const [jurisdiction, setJurisdiction] = useState("National"); // "National", "State", "District"
   const [statesList, setStatesList] = useState([]);
@@ -48,11 +50,20 @@ function Overview() {
       if (filterSuspicious !== "") {
         params.suspicious = filterSuspicious;
       }
+      if (filterReason !== "") {
+        params.reason = filterReason;
+      }
       if (jurisdiction === "State" && selectedState) {
         params.state = selectedState;
       } else if (jurisdiction === "District" && selectedState && selectedDistrict) {
         params.state = selectedState;
         params.district = selectedDistrict;
+      }
+      if (searchVehicle) {
+        params.vehicle = searchVehicle;
+      }
+      if (searchEwb) {
+        params.ewb = searchEwb;
       }
       const data = await getAllBills(params);
       setBills(data.data || []);
@@ -82,7 +93,7 @@ function Overview() {
 
   useEffect(() => {
     fetchBills(page);
-  }, [page, filterSuspicious, jurisdiction, selectedState, selectedDistrict]);
+  }, [page, filterSuspicious, filterReason, searchVehicle, searchEwb, jurisdiction, selectedState, selectedDistrict]);
 
   useEffect(() => {
     fetchStats();
@@ -118,15 +129,7 @@ function Overview() {
     loadDistricts();
   }, [selectedState]);
 
-  const filteredBills = searchVehicle
-    ? bills.filter(
-        (b) =>
-          b.vehicle_number &&
-          b.vehicle_number
-            .toLowerCase()
-            .includes(searchVehicle.toLowerCase())
-      )
-    : bills;
+  const filteredBills = bills;
 
   return (
     <div>
@@ -136,7 +139,7 @@ function Overview() {
           Officer Dashboard
         </h1>
         <p style={{ color: "#333" }}>
-          Real-time E-Way Bill monitoring and suspicious transaction detection
+          Real-time E-Way Bill monitoring and verification dashboard
         </p>
       </div>
 
@@ -260,19 +263,20 @@ function Overview() {
           color="#005F5F"
         />
         <KPICard
-          title="Suspicious"
+          title="Suspicious Bills"
           value={stats.suspicious}
           color="#C62828"
         />
         <KPICard
-          title="Clean"
+          title="Clean Bills"
           value={stats.clean}
           color="#2E7D32"
         />
         <KPICard
-          title="Top Reasons"
-          value={stats.top_reasons?.length || 0}
-          color="#EF6C00"
+          title="Top Reason"
+          value={stats.top_reasons?.length > 0 ? stats.top_reasons[0].reason : "None"}
+          color="#E65100"
+          small
         />
       </div>
 
@@ -291,7 +295,7 @@ function Overview() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(3,1fr)",
+            gridTemplateColumns: "repeat(4, 1fr)",
             gap: "20px",
             marginBottom: "20px",
           }}
@@ -299,9 +303,20 @@ function Overview() {
           <input
             placeholder="Search Vehicle Number"
             value={searchVehicle}
-            onChange={(e) =>
-              setSearchVehicle(e.target.value)
-            }
+            onChange={(e) => {
+              setSearchVehicle(e.target.value);
+              setPage(1);
+            }}
+            style={inputStyle}
+          />
+
+          <input
+            placeholder="Search E-Way Bill No"
+            value={searchEwb}
+            onChange={(e) => {
+              setSearchEwb(e.target.value);
+              setPage(1);
+            }}
             style={inputStyle}
           />
 
@@ -313,15 +328,33 @@ function Overview() {
             }}
             style={inputStyle}
           >
-            <option value="">All Bills</option>
+            <option value="">All Statuses</option>
             <option value="true">Suspicious Only</option>
             <option value="false">Clean Only</option>
+          </select>
+
+          <select
+            value={filterReason}
+            onChange={(e) => {
+              setFilterReason(e.target.value);
+              setPage(1);
+            }}
+            style={inputStyle}
+            disabled={filterSuspicious === "false"}
+          >
+            <option value="">All Suspicious Types</option>
+            <option value="No toll data available for this trip">No Toll Data</option>
+            <option value="Toll triggered significantly outside of the expected path">Out of Path</option>
+            <option value="Vehicle passed through the same toll plaza multiple times during this trip">Duplicate Tolls</option>
+            <option value="Overlapping">Overlapping Bills</option>
           </select>
 
           <button
             onClick={() => {
               setFilterSuspicious("");
+              setFilterReason("");
               setSearchVehicle("");
+              setSearchEwb("");
               setPage(1);
             }}
             style={resetStyle}
@@ -389,7 +422,9 @@ function Overview() {
                   <th>From Pin</th>
                   <th>To Pin</th>
                   <th>Distance (km)</th>
-                  <th>Amount (₹)</th>
+                  <th>Bearing</th>
+                  <th>Assessed Value (₹)</th>
+                  <th>Total Vehicle GST (₹)</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -424,8 +459,28 @@ function Overview() {
                       {bill.travel_distance ?? "—"}
                     </td>
                     <td style={cellStyle}>
+                      {bill.ideal_bearing != null
+                        ? `${bill.ideal_bearing.toFixed(1)}°`
+                        : "—"}
+                      {bill.bearing_deviation != null && (
+                        <span style={{
+                          marginLeft: "6px",
+                          fontSize: "11px",
+                          color: bill.bearing_deviation > 30 ? "#C62828" : "#2E7D32",
+                          fontWeight: "bold"
+                        }}>
+                          (Δ{bill.bearing_deviation.toFixed(1)}°)
+                        </span>
+                      )}
+                    </td>
+                    <td style={cellStyle}>
                       {bill.ewb_ass_amt
                         ? `₹${bill.ewb_ass_amt.toLocaleString()}`
+                        : "—"}
+                    </td>
+                    <td style={cellStyle}>
+                      {bill.total_vehicle_gst != null
+                        ? `₹${bill.total_vehicle_gst.toLocaleString()}`
                         : "—"}
                     </td>
                     <td style={cellStyle}>
@@ -435,15 +490,11 @@ function Overview() {
                           borderRadius: "10px",
                           fontSize: "13px",
                           fontWeight: "bold",
-                          background: bill.suspicious
-                            ? "#C62828"
-                            : "#2E7D32",
+                          background: bill.suspicious ? "#C62828" : "#2E7D32",
                           color: "#fff",
                         }}
                       >
-                        {bill.suspicious
-                          ? "Suspicious"
-                          : "Clean"}
+                        {bill.suspicious ? "⚠ Suspicious" : "✓ Clean"}
                       </span>
                     </td>
                   </tr>
@@ -497,7 +548,7 @@ function Overview() {
   );
 }
 
-function KPICard({ title, value, color }) {
+function KPICard({ title, value, color, small }) {
   return (
     <div
       style={{
@@ -516,7 +567,7 @@ function KPICard({ title, value, color }) {
       >
         {title}
       </p>
-      <h1 style={{ color, fontSize: "36px" }}>{value}</h1>
+      <h1 style={{ color, fontSize: small ? "18px" : "36px" }}>{value}</h1>
     </div>
   );
 }

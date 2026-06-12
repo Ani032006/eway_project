@@ -135,11 +135,14 @@ export function uploadExcel(file) {
   });
 }
 
-export function getAllBills({ page = 1, limit = 50, suspicious, state, district } = {}) {
+export function getAllBills({ page = 1, limit = 50, suspicious, reason, state, district, vehicle, ewb } = {}) {
   const params = new URLSearchParams({ page, limit });
   if (suspicious !== undefined && suspicious !== "") params.set("suspicious", suspicious);
+  if (reason) params.set("reason", reason);
   if (state) params.set("state", state);
   if (district) params.set("district", district);
+  if (vehicle) params.set("vehicle", vehicle);
+  if (ewb) params.set("ewb", ewb);
   return request(`/ewb?${params.toString()}`);
 }
 
@@ -166,4 +169,8 @@ export function getDistricts(state) {
 
 export function deleteAllBills() {
   return request("/ewb", { method: "DELETE" });
+}
+
+export function getBillTollRoute(id) {
+  return request(`/ewb/${id}/toll-route`);
 }

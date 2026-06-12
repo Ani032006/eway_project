@@ -17,6 +17,7 @@ function Analytics() {
   const [totalPages, setTotalPages] = useState(1);
   const [filterSuspicious, setFilterSuspicious] = useState("");
   const [searchVehicle, setSearchVehicle] = useState("");
+  const [searchEwb, setSearchEwb] = useState("");
 
   const fetchBills = async (pg = page) => {
     setLoading(true);
@@ -24,6 +25,12 @@ function Analytics() {
       const params = { page: pg, limit: 20 };
       if (filterSuspicious !== "") {
         params.suspicious = filterSuspicious;
+      }
+      if (searchVehicle) {
+        params.vehicle = searchVehicle;
+      }
+      if (searchEwb) {
+        params.ewb = searchEwb;
       }
       const data = await getAllBills(params);
       setBills(data.data || []);
@@ -37,7 +44,7 @@ function Analytics() {
 
   useEffect(() => {
     fetchBills(page);
-  }, [page, filterSuspicious]);
+  }, [page, filterSuspicious, searchVehicle, searchEwb]);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -51,15 +58,7 @@ function Analytics() {
     fetchStats();
   }, []);
 
-  const filteredBills = searchVehicle
-    ? bills.filter(
-        (b) =>
-          b.vehicle_number &&
-          b.vehicle_number
-            .toLowerCase()
-            .includes(searchVehicle.toLowerCase())
-      )
-    : bills;
+  const filteredBills = bills;
 
   const getRiskLevel = (bill) => {
     if (!bill.suspicious) return { label: "Safe", pct: "0%", color: "#2E7D32" };
@@ -145,7 +144,7 @@ function Analytics() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(3,1fr)",
+            gridTemplateColumns: "repeat(4,1fr)",
             gap: "20px",
             marginBottom: "20px",
           }}
@@ -153,9 +152,20 @@ function Analytics() {
           <input
             placeholder="Vehicle Number"
             value={searchVehicle}
-            onChange={(e) =>
-              setSearchVehicle(e.target.value)
-            }
+            onChange={(e) => {
+              setSearchVehicle(e.target.value);
+              setPage(1);
+            }}
+            style={inputStyle}
+          />
+
+          <input
+            placeholder="E-Way Bill No"
+            value={searchEwb}
+            onChange={(e) => {
+              setSearchEwb(e.target.value);
+              setPage(1);
+            }}
             style={inputStyle}
           />
 
@@ -176,6 +186,7 @@ function Analytics() {
             onClick={() => {
               setFilterSuspicious("");
               setSearchVehicle("");
+              setSearchEwb("");
               setPage(1);
             }}
             style={resetStyle}
@@ -239,7 +250,7 @@ function Analytics() {
                 >
                   <th>Vehicle</th>
                   <th>EWB No</th>
-                  <th>Distance Ratio</th>
+                  <th>Total Vehicle GST (₹)</th>
                   <th>Risk</th>
                   <th>Status</th>
                 </tr>
@@ -267,8 +278,8 @@ function Analytics() {
                         {bill.ewb_no}
                       </td>
                       <td style={cellStyle}>
-                        {bill.distance_ratio
-                          ? `${bill.distance_ratio.toFixed(2)}x`
+                        {bill.total_vehicle_gst != null
+                          ? `₹${bill.total_vehicle_gst.toLocaleString()}`
                           : "—"}
                       </td>
                       <td style={cellStyle}>
